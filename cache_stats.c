@@ -51,10 +51,10 @@ void update_stats(cache_stats_t *stats, bool hit_f, bool writeback_f, bool upgra
   if (upgrade_miss_f)
     stats->n_upgrade_miss++;
 
-  if (action == LD_MISS || action = ST_MISS) {
-    stats->total_bus_snoops++;
+  if (action = ST_MISS || action == LD_MISS) {
+    stats->n_bus_snoops++;
     if (hit_f) {
-      stats->total_snoop_hits++;
+      stats->n_snoop_hits++;
     }
   }
 
@@ -70,10 +70,10 @@ void calculate_stat_rates(cache_stats_t *stats, int block_size) {
   // FIX THIS CODE!
   // you will need to modify this function in order to properly
   // calculate wb and wt data
-  stats->B_bus_to_cache = 0;
-  stats->B_cache_to_bus_wb = 0;
-  stats->B_cache_to_bus_wt = 0;
-  stats->B_total_traffic_wb = 0;
-  stats->B_total_traffic_wt = 0;
+  stats->B_bus_to_cache = (stats->n_cpu_accesses - stats->n_hits) * block_size;
+  stats->B_cache_to_bus_wb =stats->n_writebacks * block_size;
+  stats->B_cache_to_bus_wt = 4 * stats->n_stores;
+  stats->B_total_traffic_wb = stats->B_bus_to_cache + stats->B_cache_to_bus_wb;
+  stats->B_total_traffic_wt = stats->B_bus_to_cache + stats->B_cache_to_bus_wt;
 
 }
