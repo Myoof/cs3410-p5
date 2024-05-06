@@ -101,13 +101,6 @@ unsigned long get_cache_block_addr(cache_t *cache, unsigned long addr)
 bool vi_ldmiss_stmiss(cache_t *cache, enum action_t action, unsigned long index,
                       unsigned long tag, cache_line_t *line, bool hit, int way)
 {
-
-  // do we need to update LRU here? For hit case? For miss case?
-  // do we need to do anything for Miss? reference to this ed post: https://edstem.org/us/courses/51792/discussion/4907227
-  // does it look generally fine? do i need to update the line->tag for the miss case?
-  // do we update tag on a miss for a vi protocol?
-
-  // direct mapped - don't use way here.
     bool wb = false;
     if (hit) {
       // hit sequence
@@ -142,122 +135,10 @@ bool vi_ldmiss_stmiss(cache_t *cache, enum action_t action, unsigned long index,
         // INVALID
         line->state = INVALID;
       }*/
+      line->state = INVALID;
     }
     update_stats(cache->stats, hit, wb, false, action);
     return hit;
-}
-
-// function to implement for task 10
-bool cache_msi(cache_t *cache, enum action_t action, unsigned long index,
-                      unsigned long tag, cache_line_t *line, bool hit, int way)
-{
-  bool wb = false;
-  bool upgrade_miss = false;
-  if (hit) 
-  {
-    // MODIFIED CASE
-    if (line->state == MODIFIED) {
-      if (action == STORE || action == LOAD) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
-      }
-      else if (action == LD_MISS) {
-        if (line->dirty_f) {
-          line->dirty_f = false;
-          wb = true;
-        }
-        line->state = SHARED;
-      }
-      else if (action == ST_MISS) {
-        if (line->dirty_f) {
-          line->dirty_f = false;
-          wb = true;
-        }
-        line->state = INVALID;
-      }
-
-      // SHARED
-    } else if (line->state == SHARED) {
-      
-      if (action == LOAD) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
-      } else if (action == LD_MISS) {
-        line->state = SHARED;
-      } else if (action == STORE) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
-        upgrade_miss = true;
-        line->state = MODIFIED;
-      } else if (action == ST_MISS) {
-        line->state = INVALID;
-      }
-    } else if (line->state == INVALID) {
-      if (action == LD_MISS || action == ST_MISS) {
-        line->state = INVALID;
-      } else if (action == STORE) {
-        line->state = MODIFIED;
-      } else if (action == LOAD) {
-        line->state = SHARED;
-      }
-    }
-
-
-
-  }
-  else {
-    // miss sequence - what do i do here? Do i just copy the hit code over, plus the next 6 lines?
-    line->tag = tag
-    if (line->dirty_f)
-    {
-      wb = true;
-      line->dirty_f = false;
-    }
-
-    // MODIFIED CASE
-    if (line->state == MODIFIED) {
-      if (action == STORE || action == LOAD) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
-      }
-      else if (action == LD_MISS) {
-        if (line->dirty_f) {
-          line->dirty_f = false;
-          wb = true;
-        }
-        line->state = SHARED;
-      }
-      else if (action == ST_MISS) {
-        if (line->dirty_f) {
-          line->dirty_f = false;
-          wb = true;
-        }
-        line->state = INVALID;
-      }
-
-      // SHARED
-    } else if (line->state == SHARED) {
-      if (action == LOAD) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
-      } else if (action == LD_MISS) {
-        line->state = SHARED;
-      } else if (action == STORE) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
-        upgrade_miss = true;
-        line->state = MODIFIED;
-      } else if (action == ST_MISS) {
-        line->state = INVALID;
-      }
-    } else if (line->state == INVALID) {
-      if (action == LD_MISS || action == ST_MISS) {
-        line->state = INVALID;
-      } else if (action == STORE) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
-        line->state = MODIFIED;
-      } else if (action == LOAD) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
-        line->state = SHARED;
-      }
-    }
-  }
-  update_stats(cache->stats, hit, wb, upgrade_miss, action);
-  return hit;
 }
 
 bool basic_load_store(cache_t *cache, enum action_t action, unsigned long index,
@@ -290,6 +171,138 @@ bool basic_load_store(cache_t *cache, enum action_t action, unsigned long index,
   update_stats(cache->stats, hit, wb, false, action);
   return hit;
 }
+
+// function to implement for task 10
+bool cache_msi(cache_t *cache, enum action_t action, unsigned long index,
+                      unsigned long tag, cache_line_t *line, bool hit, int way)
+{
+  bool wb = false;
+  bool upgrade_miss = false;
+  bool basic_called = false;
+  if (hit) 
+  {
+    // MODIFIED CASE
+    if (line->state == MODIFIED) {
+      if (action == STORE || action == LOAD) {
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
+      }
+      else if (action == LD_MISS) {
+        if (line->dirty_f) {
+          line->dirty_f = false;
+          wb = true;
+        }
+        line->state = SHARED;
+      }
+      else if (action == ST_MISS) {
+        if (line->dirty_f) {
+          line->dirty_f = false;
+          wb = true;
+        }
+        line->state = INVALID;
+      }
+
+      // SHARED
+    } else if (line->state == SHARED) {
+      
+      if (action == LOAD) {
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
+        line->state=SHARED;
+      } else if (action == LD_MISS) {
+        line->state = SHARED;
+      } else if (action == STORE) {
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
+        upgrade_miss = true;
+        line->state = MODIFIED;
+      } else if (action == ST_MISS) {
+        line->state = INVALID;
+      }
+    } else if (line->state == INVALID) {
+      if (action == LD_MISS || action == ST_MISS) {
+        line->state = INVALID;
+      } else if (action == STORE) {
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        line->state = MODIFIED;
+        basic_called = true;
+      } else if (action == LOAD) {
+        line->state = SHARED;
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
+      }
+    }
+
+
+
+  }
+  else {
+    // miss sequence - what do i do here? Do i just copy the hit code over, plus the next 6 lines?
+    line->tag = tag;
+    if (line->dirty_f)
+    {
+      wb = true;
+      line->dirty_f = false;
+    }
+
+    if (line->state == MODIFIED) {
+      if (action == STORE || action == LOAD) {
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
+      }
+      else if (action == LD_MISS) {
+        if (line->dirty_f) {
+          line->dirty_f = false;
+          wb = true;
+        }
+        line->state = SHARED;
+      }
+      else if (action == ST_MISS) {
+        if (line->dirty_f) {
+          line->dirty_f = false;
+          wb = true;
+        }
+        line->state = INVALID;
+      }
+
+      // SHARED
+    } else if (line->state == SHARED) {
+      
+      if (action == LOAD) {
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
+        line->state=SHARED;
+      } else if (action == LD_MISS) {
+        line->state = SHARED;
+      } else if (action == STORE) {
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
+        upgrade_miss = true;
+        line->state = MODIFIED;
+      } else if (action == ST_MISS) {
+        line->state = INVALID;
+      }
+    } else if (line->state == INVALID) {
+      if (action == LD_MISS || action == ST_MISS) {
+        line->state = INVALID;
+      } else if (action == STORE) {
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        line->state = MODIFIED;
+        basic_called = true;
+      } else if (action == LOAD) {
+        line->state = SHARED;
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
+      }
+    }
+  }
+  if (! basic_called) {
+  update_stats(cache->stats, hit, wb, upgrade_miss, action);
+  }
+  return hit;
+}
+
+
 
 /* this method takes a cache, an address, and an action
  * it proceses the cache access. functionality in no particular order:
