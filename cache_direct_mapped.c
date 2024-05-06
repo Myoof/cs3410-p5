@@ -155,7 +155,7 @@ bool basic_load_store(cache_t *cache, enum action_t action, unsigned long index,
   }
   else
   {
-    line->tag = tag
+    line->tag = tag;
     if (line->dirty_f)
     {
       wb = true;
@@ -168,7 +168,11 @@ bool basic_load_store(cache_t *cache, enum action_t action, unsigned long index,
     }
     cache->lru_way[index] = (cache->lru_way[index] + 1) % cache->assoc;
   }
+  if (line->state == SHARED && action == STORE) {
+    update_stats(cache->stats, hit, wb, true, action);  
+  } else {
   update_stats(cache->stats, hit, wb, false, action);
+  }
   return hit;
 }
 
@@ -178,12 +182,14 @@ bool cache_msi(cache_t *cache, enum action_t action, unsigned long index,
 {
   bool wb = false;
   bool upgrade_miss = false;
+  bool basic_called = false;
   if (hit) 
   {
     // MODIFIED CASE
     if (line->state == MODIFIED) {
       if (action == STORE || action == LOAD) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
       }
       else if (action == LD_MISS) {
         if (line->dirty_f) {
@@ -204,23 +210,44 @@ bool cache_msi(cache_t *cache, enum action_t action, unsigned long index,
     } else if (line->state == SHARED) {
       
       if (action == LOAD) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
+        line->state=SHARED;
       } else if (action == LD_MISS) {
         line->state = SHARED;
       } else if (action == STORE) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
+        hit = false;
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
         upgrade_miss = true;
         line->state = MODIFIED;
+        // you never do an upgrade miss here, because you dont run update_stats in this case. take what you need from store and sort it out.
+        // use modified load store that has upgrade_miss set to true
       } else if (action == ST_MISS) {
+        if (line->dirty_f) {
+          line->dirty_f = false;
+          wb = true;
+        }
         line->state = INVALID;
       }
     } else if (line->state == INVALID) {
-      if (action == LD_MISS || action == ST_MISS) {
+      if (action == LD_MISS) {
+        line->state = INVALID;
+      }else if (action == ST_MISS) {
+        if (line->dirty_f) {
+          line->dirty_f = false;
+          wb = true;
+        }
         line->state = INVALID;
       } else if (action == STORE) {
+        hit = false;
+        basic_load_store(cache, action, index, tag, line, hit, way);
         line->state = MODIFIED;
+        basic_called = true;
       } else if (action == LOAD) {
         line->state = SHARED;
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
       }
     }
 
@@ -229,17 +256,19 @@ bool cache_msi(cache_t *cache, enum action_t action, unsigned long index,
   }
   else {
     // miss sequence - what do i do here? Do i just copy the hit code over, plus the next 6 lines?
-    line->tag = tag
+    line->tag = tag;
     if (line->dirty_f)
     {
       wb = true;
       line->dirty_f = false;
     }
 
+    {
     // MODIFIED CASE
     if (line->state == MODIFIED) {
       if (action == STORE || action == LOAD) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
       }
       else if (action == LD_MISS) {
         if (line->dirty_f) {
@@ -258,30 +287,56 @@ bool cache_msi(cache_t *cache, enum action_t action, unsigned long index,
 
       // SHARED
     } else if (line->state == SHARED) {
+      
       if (action == LOAD) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
+        line->state=SHARED;
       } else if (action == LD_MISS) {
         line->state = SHARED;
       } else if (action == STORE) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
+        hit = false;
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
         upgrade_miss = true;
         line->state = MODIFIED;
+        // you never do an upgrade miss here, because you dont run update_stats in this case. take what you need from store and sort it out.
+        // use modified load store that has upgrade_miss set to true
       } else if (action == ST_MISS) {
+        if (line->dirty_f) {
+          line->dirty_f = false;
+          wb = true;
+        }
         line->state = INVALID;
       }
     } else if (line->state == INVALID) {
-      if (action == LD_MISS || action == ST_MISS) {
+      if (action == LD_MISS) {
+        line->state = INVALID;
+      }else if (action == ST_MISS) {
+        if (line->dirty_f) {
+          line->dirty_f = false;
+          wb = true;
+        }
         line->state = INVALID;
       } else if (action == STORE) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
+        hit = false;
+        basic_load_store(cache, action, index, tag, line, hit, way);
         line->state = MODIFIED;
+        basic_called = true;
       } else if (action == LOAD) {
-        basic_load_store(cache, action, index, tag, line, hit, way_number);
         line->state = SHARED;
+        basic_load_store(cache, action, index, tag, line, hit, way);
+        basic_called = true;
       }
     }
+
+
+
   }
+  }
+  if (! basic_called) {
   update_stats(cache->stats, hit, wb, upgrade_miss, action);
+  }
   return hit;
 }
 

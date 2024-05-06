@@ -168,7 +168,11 @@ bool basic_load_store(cache_t *cache, enum action_t action, unsigned long index,
     }
     cache->lru_way[index] = (cache->lru_way[index] + 1) % cache->assoc;
   }
+  if (line->state == SHARED && action == STORE) {
+    update_stats(cache->stats, hit, wb, true, action);  
+  } else {
   update_stats(cache->stats, hit, wb, false, action);
+  }
   return hit;
 }
 
@@ -212,17 +216,31 @@ bool cache_msi(cache_t *cache, enum action_t action, unsigned long index,
       } else if (action == LD_MISS) {
         line->state = SHARED;
       } else if (action == STORE) {
+        hit = false;
         basic_load_store(cache, action, index, tag, line, hit, way);
         basic_called = true;
         upgrade_miss = true;
         line->state = MODIFIED;
+        // you never do an upgrade miss here, because you dont run update_stats in this case. take what you need from store and sort it out.
+        // use modified load store that has upgrade_miss set to true
       } else if (action == ST_MISS) {
+        if (line->dirty_f) {
+          line->dirty_f = false;
+          wb = true;
+        }
         line->state = INVALID;
       }
     } else if (line->state == INVALID) {
-      if (action == LD_MISS || action == ST_MISS) {
+      if (action == LD_MISS) {
+        line->state = INVALID;
+      }else if (action == ST_MISS) {
+        if (line->dirty_f) {
+          line->dirty_f = false;
+          wb = true;
+        }
         line->state = INVALID;
       } else if (action == STORE) {
+        hit = false;
         basic_load_store(cache, action, index, tag, line, hit, way);
         line->state = MODIFIED;
         basic_called = true;
@@ -245,6 +263,8 @@ bool cache_msi(cache_t *cache, enum action_t action, unsigned long index,
       line->dirty_f = false;
     }
 
+    {
+    // MODIFIED CASE
     if (line->state == MODIFIED) {
       if (action == STORE || action == LOAD) {
         basic_load_store(cache, action, index, tag, line, hit, way);
@@ -275,17 +295,31 @@ bool cache_msi(cache_t *cache, enum action_t action, unsigned long index,
       } else if (action == LD_MISS) {
         line->state = SHARED;
       } else if (action == STORE) {
+        hit = false;
         basic_load_store(cache, action, index, tag, line, hit, way);
         basic_called = true;
         upgrade_miss = true;
         line->state = MODIFIED;
+        // you never do an upgrade miss here, because you dont run update_stats in this case. take what you need from store and sort it out.
+        // use modified load store that has upgrade_miss set to true
       } else if (action == ST_MISS) {
+        if (line->dirty_f) {
+          line->dirty_f = false;
+          wb = true;
+        }
         line->state = INVALID;
       }
     } else if (line->state == INVALID) {
-      if (action == LD_MISS || action == ST_MISS) {
+      if (action == LD_MISS) {
+        line->state = INVALID;
+      }else if (action == ST_MISS) {
+        if (line->dirty_f) {
+          line->dirty_f = false;
+          wb = true;
+        }
         line->state = INVALID;
       } else if (action == STORE) {
+        hit = false;
         basic_load_store(cache, action, index, tag, line, hit, way);
         line->state = MODIFIED;
         basic_called = true;
@@ -295,6 +329,10 @@ bool cache_msi(cache_t *cache, enum action_t action, unsigned long index,
         basic_called = true;
       }
     }
+
+
+
+  }
   }
   if (! basic_called) {
   update_stats(cache->stats, hit, wb, upgrade_miss, action);
@@ -352,7 +390,7 @@ bool access_cache(cache_t *cache, unsigned long addr, enum action_t action)
     }
     }
 
-    else if (cache->protocol == MSI) {
+    else if (cache->protocol == MSI && (way->state == MODIFIED || way->state == SHARED)) {
         hit = true;
         line = way;
         way_number = i;
