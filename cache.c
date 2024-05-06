@@ -101,7 +101,29 @@ unsigned long get_cache_block_addr(cache_t *cache, unsigned long addr)
 bool vi_ldmiss_stmiss(cache_t *cache, enum action_t action, unsigned long index,
                       unsigned long tag, cache_line_t *line, bool hit, int way)
 {
-  return false;
+  // direct mapped - don't use way here.
+    int way_number = 0;
+    bool wb = false;
+    if (hit) {
+      // hit sequence
+      if (line->state == VALID) {
+        if (line->dirty_f) {
+          line->dirty_f = false;
+          wb = true;
+        }
+        line->state = INVALID;
+      }
+      else {
+        // INVALID
+        line->state = INVALID;
+      }
+    }
+    else {
+      // miss sequence - do nothing
+
+    }
+    update_stats(cache->stats, hit, wb, false, action);
+    return hit;
 }
 
 // function to implement for task 10
@@ -183,17 +205,17 @@ bool access_cache(cache_t *cache, unsigned long addr, enum action_t action)
       }
     }
 
-    // UNCOMMENT BELOW AFTER TASK 9
-    // else if (cache->protocol == VI)
-    // {
-    //   if (tag == way->tag && way->state == VALID)
-    //   {
-    //     hit = true;
-    //     line = way;
-    //     way_number = i;
-    //     break;
-    //   }
-    // }
+
+    else if (cache->protocol == VI)
+    {
+    if (tag == way->tag && way->state == VALID)
+    {
+    hit = true;
+    line = way;
+   way_number = i;
+    break;
+    }
+    }
   }
 
   if (!hit)
@@ -208,19 +230,19 @@ bool access_cache(cache_t *cache, unsigned long addr, enum action_t action)
     }
   }
 
-  // UNCOMMENT BELOW AFTER TASK 9
-  // else if (cache->protocol == VI)
-  // {
-  //   if (action == LOAD || action == STORE)
-  //   {
-  //     line->state = VALID;
-  //     basic_load_store(cache, action, index, tag, line, hit, way_number);
-  //   }
-  //   else
-  //   {
-  //     vi_ldmiss_stmiss(cache, action, index, tag, line, hit, way_number);
-  //   }
-  // }
+
+  else if (cache->protocol == VI)
+  {
+ if (action == LOAD || action == STORE)
+  {
+  line->state = VALID;
+  basic_load_store(cache, action, index, tag, line, hit, way_number);
+  }
+  else
+  {
+  vi_ldmiss_stmiss(cache, action, index, tag, line, hit, way_number);
+  }
+ }
   log_way(way_number);
   return hit;
 }

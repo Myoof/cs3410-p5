@@ -101,8 +101,32 @@ unsigned long get_cache_block_addr(cache_t *cache, unsigned long addr)
 bool vi_ldmiss_stmiss(cache_t *cache, enum action_t action, unsigned long index,
                       unsigned long tag, cache_line_t *line, bool hit, int way)
 {
-  return false;
-}
+
+    // direct mapped - don't use way here.
+    int way_number = 0;
+    bool wb = false;
+    if (hit) {
+      // hit sequence
+      if (line->state == VALID) {
+        if (line->dirty_f) {
+          line->dirty_f = false;
+          wb = true;
+        }
+        line->state = INVALID;
+      }
+      else {
+        // INVALID
+        line->state = INVALID;
+      }
+    }
+    else {
+      // miss sequence - do nothing
+
+    }
+    update_stats(cache->stats, hit, wb, false, action);
+    return hit;
+  }
+
 
 // function to implement for task 10
 bool cache_msi(cache_t *cache, unsigned long addr, enum action_t action)
@@ -124,7 +148,7 @@ bool basic_load_store(cache_t *cache, enum action_t action, unsigned long index,
   }
   else
   {
-    line->tag = tag;
+    line->tag = tag
     if (line->dirty_f)
     {
       wb = true;
