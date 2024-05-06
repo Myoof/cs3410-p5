@@ -207,17 +207,16 @@ bool access_cache(cache_t *cache, unsigned long addr, enum action_t action)
       }
     }
 
-    // UNCOMMENT BELOW AFTER TASK 9
-    // else if (cache->protocol == VI)
-    // {
-    //   if (tag == way->tag && way->state == VALID)
-    //   {
-    //     hit = true;
-    //     line = way;
-    //     way_number = i;
-    //     break;
-    //   }
-    // }
+     else if (cache->protocol == VI)
+     {
+       if (tag == way->tag && way->state == VALID)
+       {
+         hit = true;
+        line = way;
+         way_number = i;
+         break;
+    }
+   }
   }
 
   if (!hit)
@@ -232,19 +231,19 @@ bool access_cache(cache_t *cache, unsigned long addr, enum action_t action)
     }
   }
 
-  // UNCOMMENT BELOW AFTER TASK 9
-  // else if (cache->protocol == VI)
-  // {
-  //   if (action == LOAD || action == STORE)
-  //   {
-  //     line->state = VALID;
-  //     basic_load_store(cache, action, index, tag, line, hit, way_number);
-  //   }
-  //   else
-  //   {
-  //     vi_ldmiss_stmiss(cache, action, index, tag, line, hit, way_number);
-  //   }
-  // }
+
+  else if (cache->protocol == VI)
+{
+  if (action == LOAD || action == STORE)
+{
+  line->state = VALID;
+  basic_load_store(cache, action, index, tag, line, hit, way_number);
+  
+  else
+}
+vi_ldmiss_stmiss(cache, action, index, tag, line, hit, way_number);
+
+
   log_way(way_number);
   return hit;
 }
