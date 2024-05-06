@@ -217,6 +217,12 @@ bool access_cache(cache_t *cache, unsigned long addr, enum action_t action)
          break;
     }
    }
+   else if (cache->protocol == MSI) {
+        hit = true;
+        line = way;
+        way_number = i;
+        break;
+    }
   }
 
   if (!hit)
@@ -243,7 +249,12 @@ bool access_cache(cache_t *cache, unsigned long addr, enum action_t action)
 }
 vi_ldmiss_stmiss(cache, action, index, tag, line, hit, way_number);
 
-
+}
+else if (cache->protocol == MSI) {
+  cache_msi(cache, action, index, tag, line, hit, way_number);
+ }
   log_way(way_number);
   return hit;
 }
+
+
